@@ -74,6 +74,14 @@
        (< 2 (length (symbol-name sym)))
        (string= "o!" (substring (symbol-name sym) 0 2))))
 
+(defun maclow:%o!-symbol-to-g!-symbol (sym)
+  "Return the interned symbol that convert g! prefix to o! prefix.
+If sym is not o! symbol, then return as is argument.
+"
+  (if (maclow:%o!-symbol-p sym)
+      (intern (concat "g!" (substring (symbol-name sym) 2)))
+    sym))
+
 (defmacro maclow:%defmacro!g (name args &rest body)
   "Define new macro that do gensym each symbols in the body only g! prefix symbols"
 
@@ -81,15 +89,30 @@
   (let ((syms (cl-loop for sym in (cl-remove-duplicates
                                    (cl-remove-if-not #'maclow:%g!-symbol-p
                                                      (-flatten body)))
-                       return (intern (symbol-name sym))))
+                       collect (intern (symbol-name sym)))))
     `(defmacro ,name ,args
-       (let ,(cl-mapcar #'(lambda (s)
-                            `(,s ,(make-symbol (substring (symbol-name s) 2))))
+       (let ,(cl-mapcar (lambda (s)
+                            `(,s (make-symbol ,(substring (symbol-name s) 2))))
                         syms)
          ,@body
-        ))))
-(put 'maclow:%defmacro!g 'lisp-indent-function 2)
+         ))))
 
+(defmacro maclow:defmacro! (name args &rest body)
+  "Define new macro that automatic generate g! prefix symbols for args that are o! prefix,
+so they are only once evaluate."
 
+  ;; collect o! prefixed list as interned symbol.
+  (let* ((osyms (cl-loop for sym in (cl-remove-if-not #'maclow:%o!-symbol-p args)
+                         collect (intern (symbol-name sym))))
+         ;; collect g! prefixed list that are converted o! to g!
+         (gsyms (mapcar #'maclow:%o!-symbol-to-g!-symbol osyms)))
+    ;; re-define macro via given name, args and body.
+    ;; This double list needs to once-only evaluation in args.
+    ;; First, outer quote is to define macro by macro for automatic generation symbol.
+    ;; Second, internal quate is to define let generated symbol as arguments once-only evaluated.
+    `(maclow:%defmacro!g ,name ,args
+       `(let ,(cl-mapcar #'list (list ,@gsyms) (list ,@osyms))
+         ,(progn ,@body)))))
+(put 'maclow:defmacro! 'lisp-indent-function 2)
 
 (provide 'mac-low)

@@ -48,12 +48,30 @@
     (expect nil
       (-all? #'maclow:%o!-symbol-p '(g1sym g!sym normal-symbol anysymbol)))
 
-    (desc "g!がプレフィックスのシンボル以外をgensymにする")
+    (desc "g!がプレフィックスのシンボルのみをuninternなシンボルにする")
     (expect '(1 4 6)
-      (maclow:%defmacro!g tmp (g!a)
-          (if t
-              g!a))
+      (maclow:%defmacro!g tmp (b)
+        (if nil
+            g!a
+          b))
       (tmp '(1 4 6)))
+
+    (desc "o!がプレフィックスのシンボルをg!がプレフィックスのシンボルに変換する")
+    (expect '(g!sym nosym osym)
+      (mapcar #'maclow:%o!-symbol-to-g!-symbol
+              '(o!sym nosym osym)))
+
+    (desc "Common Lispのdefmacro!をエミュレートする")
+    (expect 4
+      (maclow:defmacro! tmp (o!a)
+        `(* ,g!a ,g!a))
+      (tmp (1+ 1)))
+    (expect '(4 2)
+      (let ((num 1))
+        (maclow:defmacro! tmp (o!a)
+          `(* ,g!a ,g!a))
+        (let ((r (tmp (cl-incf num))))
+          (list r num))))
     ))
 
-  (ert-run-tests-batch-and-exit)
+(ert-run-tests-batch-and-exit)
